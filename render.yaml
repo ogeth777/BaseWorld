@@ -6,5 +6,18 @@ services:
     buildCommand: npm install --omit=dev
     startCommand: node server/index.js
     envVars:
+      - key: PORT
+        value: 3000
+
+  - type: static
+    name: worldbase-frontend
+    env: static
+    plan: free
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    envVars:
       - key: VITE_API_URL
-        value: https://worldbase-server.onrender.com
+        fromService:
+          type: web
+          name: worldbase-server
+          property: url
