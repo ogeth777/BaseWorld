@@ -8,6 +8,8 @@ import { baseSepolia } from 'viem/chains';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import axios from 'axios';
+import fs from 'fs';
+import path from 'path';
 
 dotenv.config();
 
@@ -19,6 +21,62 @@ const io = new Server(httpServer, {
     methods: ["GET", "POST"]
   }
 });
+
+// Data Persistence
+const DATA_DIR = path.join(__dirname, 'data');
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// State
+const GRID_SIZE = 80000;
+let grid = new Int8Array(GRID_SIZE).fill(0); 
+let painters = new Map(); // tileId -> address
+let graffiti = new Map(); // tileId -> message
+let leaderboard = new Map(); // address -> count
+
+// Load State
+function loadState() {
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      console.log('Loading state from disk...');
+      const data = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+      
+      if (data.grid) grid = new Int8Array(data.grid);
+      if (data.painters) painters = new Map(data.painters);
+      if (data.graffiti) graffiti = new Map(data.graffiti);
+      if (data.leaderboard) leaderboard = new Map(data.leaderboard);
+      
+      console.log('State loaded successfully.');
+    }
+  } catch (e) {
+    console.error('Failed to load state:', e);
+  }
+}
+loadState();
+
+// Save State (Throttled)
+let saveTimeout = null;
+function scheduleSave() {
+  if (saveTimeout) return;
+  saveTimeout = setTimeout(() => {
+    try {
+      const data = {
+        grid: Array.from(grid),
+        painters: Array.from(painters.entries()),
+        graffiti: Array.from(graffiti.entries()),
+        leaderboard: Array.from(leaderboard.entries())
+      };
+      fs.writeFileSync(STATE_FILE, JSON.stringify(data));
+      // console.log('State saved to disk.');
+    } catch (e) {
+      console.error('Failed to save state:', e);
+    }
+    saveTimeout = null;
+  }, 5000); // Save at most every 5 seconds
+}
 
 app.use(helmet());
 app.use(cors());
@@ -60,7 +118,9 @@ const client = createPublicClient({
     http('https://base-sepolia-rpc.publicnode.com'),
     http('https://base-sepolia.blockpi.network/v1/rpc/public'),
     http('https://public.stackup.sh/api/v1/node/base-sepolia'),
-    http('https://base-sepolia.gateway.tenderly.co')
+    http('https://base-sepolia.gateway.tenderly.co'),
+    http('https://1rpc.io/base-sepolia'),
+    http('https://base-sepolia.drpc.org')
   ])
 });
 
@@ -185,6 +245,9 @@ app.post('/api/paint', async (req, res) => {
         message: graffiti.get(tileId)
     });
     io.emit('leaderboard-update', getLeaderboard());
+    
+    // Save state
+    scheduleSave();
 
     // Check Endgame
     // Count painted
