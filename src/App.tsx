@@ -143,9 +143,18 @@ function AppContent() {
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
+  const [isConnectedToSocket, setIsConnectedToSocket] = useState(socket.connected);
+
   // Load Grid & Socket Events
   useEffect(() => {
-    socket.on('connect', () => console.log('Socket connected'));
+    socket.on('connect', () => {
+        console.log('Socket connected');
+        setIsConnectedToSocket(true);
+    });
+    socket.on('disconnect', () => {
+        console.log('Socket disconnected');
+        setIsConnectedToSocket(false);
+    });
     
     socket.on('init-grid', (data) => {
       // data might be object or array
@@ -281,7 +290,7 @@ function AppContent() {
       setGraffitiInput('');
     } catch (err) {
       console.error(err);
-      setStatusMsg('Verification failed.');
+      setStatusMsg(`Verification failed: ${err instanceof Error ? err.message : String(err)}`);
       setIsPainting(false);
     }
   };
@@ -289,7 +298,11 @@ function AppContent() {
   const handleTileClick = (index: number) => {
     console.log('App: handleTileClick', index);
     if (audioEnabled) soundManager.playClick();
-    if (grid[index] === 1) return; // Already painted
+    if (grid[index] === 1) {
+        setStatusMsg('Tile already painted!');
+        setTimeout(() => setStatusMsg(''), 2000);
+        return; 
+    }
     setSelectedTile(index);
     setGraffitiInput(''); // Reset input
   };

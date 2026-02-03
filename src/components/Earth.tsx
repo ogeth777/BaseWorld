@@ -143,6 +143,7 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
       <instancedMesh
         ref={meshRef}
         args={[null, null, COUNT]}
+        frustumCulled={false}
         onPointerMove={(e) => {
             e.stopPropagation();
             // Debounce or check distance if needed, but simple ID check is usually fast enough
@@ -162,8 +163,8 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
         }}
       >
         {/* Unit plane, scaled by instance scale */}
-        <planeGeometry args={[0.075, 0.075]} /> 
-        <meshBasicMaterial 
+        <planeGeometry args={[0.08, 0.08]} /> 
+        <meshBasicMaterial  
             side={THREE.DoubleSide} 
             transparent 
             opacity={0.8}
