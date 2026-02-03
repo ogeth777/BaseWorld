@@ -357,10 +357,12 @@ function AppContent() {
 
     // Check Chain ID
     if (chainId !== baseSepolia.id) {
+      console.log(`Wrong chain detected: ${chainId}. Requesting switch to ${baseSepolia.id}`);
       try {
         switchChain({ chainId: baseSepolia.id });
         return;
       } catch (error) {
+        console.error('Failed to switch chain:', error);
         setStatusMsg('Please switch to Base Sepolia');
         return;
       }
@@ -525,7 +527,9 @@ function AppContent() {
             
             {writeError && (
                 <div className="error-box">
-                    Error: {writeError.message}
+                    {writeError.message.includes('chain') || writeError.message.includes('Chain') 
+                        ? <button className="btn-switch-chain" onClick={() => switchChain({ chainId: baseSepolia.id })}>WRONG NETWORK. CLICK TO SWITCH.</button>
+                        : `Error: ${writeError.message.slice(0, 100)}...`}
                 </div>
             )}
           </div>
