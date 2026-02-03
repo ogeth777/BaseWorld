@@ -12,9 +12,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
-        <GoogleReCaptchaProvider reCaptchaKey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"> {/* TEST KEY, Replace in Prod */}
+        {/* <GoogleReCaptchaProvider reCaptchaKey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"> */}
           <App />
-        </GoogleReCaptchaProvider>
+        {/* </GoogleReCaptchaProvider> */}
       </QueryClientProvider>
     </WagmiProvider>
   </React.StrictMode>,

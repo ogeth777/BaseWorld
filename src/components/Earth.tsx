@@ -1,10 +1,11 @@
-import { useRef, useMemo, useEffect, useState } from 'react';
+import { useRef, useMemo, useEffect, useState, useLayoutEffect } from 'react';
 import { useFrame, useLoader } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { TextureLoader } from 'three';
 
-const COUNT = 40000;
-const RADIUS = 5;
+const COUNT = 80000;
+const RADIUS = 7;
 
 // Helper to distribute points on a sphere (Fibonacci Sphere)
 function getFibonacciSpherePoints(samples: number, radius: number) {
@@ -28,16 +29,17 @@ interface EarthProps {
   onTileClick: (index: number) => void;
   paintedTiles: Int8Array | number[]; // 0 or 1
   endgame: boolean;
+  graffiti: Map<number, string>;
 }
 
-export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
+export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const earthRef = useRef<THREE.Mesh>(null);
   const [hovered, setHover] = useState<number | null>(null);
 
   // Load Earth Texture
   const [colorMap] = useLoader(TextureLoader, [
-    'https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg'
+    '/earth.jpg'
   ]);
 
   // Generate Tile Positions
@@ -57,21 +59,38 @@ export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
     return { positions: points, quaternions };
   }, []);
 
-  // Update InstancedMesh
+  // Init InstancedMesh Matrix (Run Once)
   useEffect(() => {
     if (!meshRef.current) return;
 
     const tempObject = new THREE.Object3D();
-    const tempColor = new THREE.Color();
-
+    
     for (let i = 0; i < COUNT; i++) {
       tempObject.position.copy(positions[i]);
       tempObject.quaternion.copy(quaternions[i]);
       tempObject.scale.set(1, 1, 1);
       tempObject.updateMatrix();
       meshRef.current.setMatrixAt(i, tempObject.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+    
+    // Initialize colors immediately to avoid invisible/black tiles if paintedTiles isn't ready
+    const tempColor = new THREE.Color();
+    for (let i = 0; i < COUNT; i++) {
+        tempColor.set('#FFFFFF');
+        meshRef.current.setColorAt(i, tempColor);
+    }
+    if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
+    
+  }, [positions, quaternions]);
 
-      // Color logic
+  // Update Colors (Run on paint)
+  useEffect(() => {
+    if (!meshRef.current) return;
+    
+    const tempColor = new THREE.Color();
+    
+    for (let i = 0; i < COUNT; i++) {
       if (paintedTiles[i] === 1) {
         tempColor.set('#0052FF'); // Base Blue
       } else {
@@ -80,9 +99,8 @@ export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
       meshRef.current.setColorAt(i, tempColor);
     }
     
-    meshRef.current.instanceMatrix.needsUpdate = true;
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
-  }, [paintedTiles, positions, quaternions]);
+  }, [paintedTiles]);
 
   // Animation
   useFrame((state, delta) => {
@@ -103,14 +121,14 @@ export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
 
   return (
     <group>
-      {/* Base Earth Sphere */}
-      <mesh ref={earthRef}>
-        <sphereGeometry args={[RADIUS, 64, 64]} />
+      {/* Base Earth Sphere - Optimized Geometry */}
+      <mesh ref={earthRef} onClick={() => console.log('Clicked Base Earth (missed tile)')}>
+        <sphereGeometry args={[RADIUS, 48, 48]} />
         <meshStandardMaterial map={colorMap} metalness={0.2} roughness={0.7} />
       </mesh>
 
-      {/* Atmosphere Glow (Simplified) */}
-      <mesh scale={[1.1, 1.1, 1.1]}>
+      {/* Atmosphere Glow (Simplified) - Disabled to prevent raycast blocking
+      <mesh scale={[1.1, 1.1, 1.1]} raycast={() => null}>
         <sphereGeometry args={[RADIUS, 64, 64]} />
         <meshBasicMaterial 
             color="#0052FF" 
@@ -119,23 +137,32 @@ export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
             side={THREE.BackSide}
         />
       </mesh>
+      */}
 
       {/* Tiles */}
       <instancedMesh
         ref={meshRef}
-        args={[undefined, undefined, COUNT]}
+        args={[null, null, COUNT]}
         onPointerMove={(e) => {
             e.stopPropagation();
-            setHover(e.instanceId !== undefined ? e.instanceId : null);
+            // Debounce or check distance if needed, but simple ID check is usually fast enough
+            if (hovered !== e.instanceId) {
+                setHover(e.instanceId !== undefined ? e.instanceId : null);
+            }
+            document.body.style.cursor = 'pointer';
         }}
-        onPointerOut={() => setHover(null)}
+        onPointerOut={() => {
+            setHover(null);
+            document.body.style.cursor = 'auto';
+        }}
         onClick={(e) => {
             e.stopPropagation();
+            console.log('Tile clicked:', e.instanceId);
             if (e.instanceId !== undefined) onTileClick(e.instanceId);
         }}
       >
         {/* Unit plane, scaled by instance scale */}
-        <planeGeometry args={[0.07, 0.07]} /> 
+        <planeGeometry args={[0.075, 0.075]} /> 
         <meshBasicMaterial 
             side={THREE.DoubleSide} 
             transparent 
@@ -145,10 +172,32 @@ export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
       </instancedMesh>
       
       {hovered !== null && (
-         <mesh position={positions[hovered]} quaternion={quaternions[hovered]} scale={[1.5, 1.5, 1]}>
-            <planeGeometry args={[0.07, 0.07]} />
-            <meshBasicMaterial color="#FF00FF" side={THREE.DoubleSide} />
-         </mesh>
+         <group position={positions[hovered]} quaternion={quaternions[hovered]}>
+             <mesh 
+                scale={[1.1, 1.1, 1]} 
+                raycast={() => null} // Ignore raycasting so it doesn't block the tile below
+                position={[0, 0, 0.01]} // Slight offset to prevent Z-fighting
+             >
+                <planeGeometry args={[0.08, 0.08]} />
+                <meshBasicMaterial color="#FF00FF" side={THREE.DoubleSide} />
+             </mesh>
+             {graffiti.has(hovered) && (
+                 <Html distanceFactor={10} position={[0, 0, 0.1]} style={{ pointerEvents: 'none' }}>
+                     <div style={{
+                         background: 'rgba(0,0,0,0.8)',
+                         color: '#fff',
+                         padding: '4px 8px',
+                         borderRadius: '4px',
+                         whiteSpace: 'nowrap',
+                         fontSize: '0.8rem',
+                         border: '1px solid #FF00FF',
+                         textShadow: '0 0 5px #FF00FF'
+                     }}>
+                         {graffiti.get(hovered)}
+                     </div>
+                 </Html>
+             )}
+         </group>
       )}
 
       {endgame && (

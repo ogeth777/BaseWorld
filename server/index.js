@@ -3,7 +3,7 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import { createPublicClient, http } from 'viem';
+import { createPublicClient, http, fallback } from 'viem';
 import { baseSepolia } from 'viem/chains';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
@@ -32,16 +32,36 @@ const limiter = rateLimit({
 app.use(limiter);
 
 // State
-const GRID_SIZE = 40000;
+const GRID_SIZE = 80000;
+console.log('--- SERVER RESTART: STATE RESET ---');
 // Using a Map for sparse storage, or array. Array for 40k ints is small (~160KB).
 // 0 = empty, 1 = painted
 const grid = new Int8Array(GRID_SIZE).fill(0); 
 const painters = new Map(); // tileId -> address
+const graffiti = new Map(); // tileId -> message
+const leaderboard = new Map(); // address -> count
+
+// Airdrop State
+let activeAirdrop = null;
+
+// Helper to get top leaderboard
+function getLeaderboard() {
+  return Array.from(leaderboard.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 10)
+    .map(([addr, score]) => ({ address: addr, score }));
+}
 
 // Blockchain Client
 const client = createPublicClient({
   chain: baseSepolia,
-  transport: http(process.env.RPC_URL || 'https://base-sepolia-rpc.publicnode.com')
+  transport: fallback([
+    http(process.env.RPC_URL || 'https://sepolia.base.org'),
+    http('https://base-sepolia-rpc.publicnode.com'),
+    http('https://base-sepolia.blockpi.network/v1/rpc/public'),
+    http('https://public.stackup.sh/api/v1/node/base-sepolia'),
+    http('https://base-sepolia.gateway.tenderly.co')
+  ])
 });
 
 // Helper to verify Recaptcha
@@ -72,25 +92,40 @@ io.on('connection', (socket) => {
   // Send initial state (compressed or full)
   // Sending 40k bytes is fine
   socket.emit('init-grid', Array.from(grid));
+  socket.emit('init-graffiti', Array.from(graffiti.entries()));
+  socket.emit('leaderboard-update', getLeaderboard());
+  if (activeAirdrop) {
+    socket.emit('spawn-airdrop', activeAirdrop);
+  }
 
   socket.on('disconnect', () => {
     console.log('Client disconnected');
   });
 });
 
+// Endpoint to get user state (cooldowns)
+app.get('/api/user-state/:address', (req, res) => {
+    const { address } = req.params;
+    const lastPaint = cooldowns.get(address);
+    res.json({ 
+        lastPaintTime: lastPaint || 0,
+        serverTime: Date.now()
+    });
+});
+
 // Endpoint to verify transaction and paint
 app.post('/api/paint', async (req, res) => {
-  const { txHash, tileId, address, captchaToken } = req.body;
+  const { txHash, tileId, address, captchaToken, message } = req.body;
 
   if (tileId < 0 || tileId >= GRID_SIZE) {
     return res.status(400).json({ error: 'Invalid tile ID' });
   }
 
   // 1. Verify Captcha
-  const isHuman = await verifyCaptcha(captchaToken);
-  if (!isHuman && process.env.RECAPTCHA_SECRET_KEY) {
-     return res.status(400).json({ error: 'Captcha failed' });
-  }
+  // const isHuman = await verifyCaptcha(captchaToken);
+  // if (!isHuman && process.env.RECAPTCHA_SECRET_KEY) {
+  //    return res.status(400).json({ error: 'Captcha failed' });
+  // }
 
   // 2. Check Cooldown
   const lastPaint = cooldowns.get(address);
@@ -100,7 +135,21 @@ app.post('/api/paint', async (req, res) => {
 
   try {
     // 3. Verify Transaction on Chain
-    const receipt = await client.getTransactionReceipt({ hash: txHash });
+    // Robust retry loop for receipt (up to 120 seconds)
+    let receipt;
+    for (let i = 0; i < 60; i++) {
+        try {
+            receipt = await client.getTransactionReceipt({ hash: txHash });
+            if (receipt) break;
+        } catch (e) {
+            console.log(`Attempt ${i+1}/60: Receipt not found yet...`);
+            if (i === 59) {
+                console.error('Final attempt failed:', e.message);
+                throw e;
+            }
+            await new Promise(r => setTimeout(r, 2000));
+        }
+    }
     
     if (receipt.status !== 'success') {
       return res.status(400).json({ error: 'Transaction failed on chain' });
@@ -114,10 +163,28 @@ app.post('/api/paint', async (req, res) => {
     // 4. Update State
     grid[tileId] = 1; // Painted
     painters.set(tileId, address);
+    
+    if (message && typeof message === 'string') {
+        // Simple sanitization: max 20 chars, no HTML
+        const cleanMessage = message.slice(0, 20).replace(/[<>]/g, '');
+        if (cleanMessage) {
+            graffiti.set(tileId, cleanMessage);
+        }
+    }
+
+    // Update Leaderboard
+    const currentScore = leaderboard.get(address) || 0;
+    leaderboard.set(address, currentScore + 1);
+    
     cooldowns.set(address, Date.now());
 
     // 5. Broadcast
-    io.emit('tile-painted', { tileId, painter: address });
+    io.emit('tile-painted', { 
+        tileId, 
+        painter: address,
+        message: graffiti.get(tileId)
+    });
+    io.emit('leaderboard-update', getLeaderboard());
 
     // Check Endgame
     // Count painted
@@ -134,6 +201,47 @@ app.post('/api/paint', async (req, res) => {
     console.error('Tx verify error:', error);
     res.status(500).json({ error: 'Verification failed' });
   }
+});
+
+// Airdrop Logic
+setInterval(() => {
+    // Spawn airdrop every 5 minutes if none active
+    if (!activeAirdrop) {
+        // Random position (spherical coords)
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        
+        activeAirdrop = {
+            id: Date.now().toString(),
+            timestamp: Date.now(),
+            position: { theta, phi } // Sync position
+        };
+        io.emit('spawn-airdrop', activeAirdrop);
+        console.log('Airdrop spawned:', activeAirdrop.id);
+
+        // Auto-expire after 1 minute if not claimed
+        setTimeout(() => {
+            if (activeAirdrop && Date.now() - activeAirdrop.timestamp > 60000) {
+                activeAirdrop = null;
+                io.emit('airdrop-expired');
+            }
+        }, 60000);
+    }
+}, 5 * 60 * 1000); // 5 minutes
+
+app.post('/api/airdrop/claim', (req, res) => {
+    const { address, airdropId } = req.body;
+    
+    if (!activeAirdrop || activeAirdrop.id !== airdropId) {
+        return res.status(400).json({ error: 'Airdrop invalid or expired' });
+    }
+
+    // Winner!
+    cooldowns.delete(address);
+    activeAirdrop = null;
+    
+    io.emit('airdrop-claimed', { winner: address });
+    res.json({ success: true });
 });
 
 const PORT = process.env.PORT || 3000;

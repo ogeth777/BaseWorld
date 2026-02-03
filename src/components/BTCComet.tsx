@@ -17,8 +17,8 @@ export function BTCComet() {
 
   // Initial spawn configuration
   // Spawns high up and far away, moves diagonally down across the screen
-  const startPos = useMemo(() => new THREE.Vector3(-50, 30, -30), []);
-  const endPos = useMemo(() => new THREE.Vector3(50, -20, 30), []);
+  const startPos = useMemo(() => new THREE.Vector3(-60, 20, -40), []);
+  const endPos = useMemo(() => new THREE.Vector3(60, 25, 40), []);
   
   // Normalized direction vector for linear motion
   const direction = useMemo(() => new THREE.Vector3().subVectors(endPos, startPos).normalize(), [startPos, endPos]);
@@ -27,7 +27,7 @@ export function BTCComet() {
   const rotationAxis = useMemo(() => new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize(), []);
 
   // Speed factor (Steady linear motion)
-  const speed = 0.05; 
+  const speed = 0.08; 
 
   useFrame((state, delta) => {
     const now = Date.now();
@@ -52,7 +52,7 @@ export function BTCComet() {
       }
 
       // Check if out of bounds
-      if (meshRef.current.position.x > 60) {
+      if (meshRef.current.position.x > 80) {
         setIsActive(false);
         setNextSpawnTime(Date.now() + RESPAWN_TIME);
         meshRef.current.position.set(1000, 1000, 1000); 
@@ -68,8 +68,8 @@ export function BTCComet() {
         we usually make them trail behind the movement.
       */}
       <Trail
-        width={6} 
-        length={12} 
+        width={2} 
+        length={8} 
         color={new THREE.Color("#ff5500")} 
         attenuation={(t) => t * t}
       >
@@ -80,7 +80,7 @@ export function BTCComet() {
              Flat shading gives it a low-poly space rock look.
            */}
            <mesh ref={bodyRef}>
-             <icosahedronGeometry args={[1.2, 1]} /> {/* Radius 1.2, Detail 1 (Rocky round) */}
+             <icosahedronGeometry args={[0.2, 1]} /> {/* Radius 0.2, Detail 1 (Small rocky) */}
              <meshStandardMaterial 
                map={texture}
                color="#ffaa00"
@@ -96,8 +96,8 @@ export function BTCComet() {
 
       {/* FIRE/PLASMA SHEATH (The burning atmosphere effect) */}
       <Sparkles 
-        count={200}
-        scale={4}
+        count={50}
+        scale={1.5}
         size={6}
         speed={0.4}
         opacity={0.8}
@@ -107,7 +107,8 @@ export function BTCComet() {
       
       {/* DEBRIS TRAIL */}
       <Sparkles 
-        count={100}
+                raycast={() => null}
+                count={100}
         scale={[2, 2, 15]} // Long narrow trail behind
         position={[-direction.x * 5, -direction.y * 5, -direction.z * 5]} // Offset behind
         size={3}
