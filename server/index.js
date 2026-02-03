@@ -89,15 +89,8 @@ const limiter = rateLimit({
 });
 app.use(limiter);
 
-// State
-const GRID_SIZE = 80000;
-console.log('--- SERVER RESTART: STATE RESET ---');
-// Using a Map for sparse storage, or array. Array for 40k ints is small (~160KB).
-// 0 = empty, 1 = painted
-const grid = new Int8Array(GRID_SIZE).fill(0); 
-const painters = new Map(); // tileId -> address
-const graffiti = new Map(); // tileId -> message
-const leaderboard = new Map(); // address -> count
+// State is already initialized above.
+// console.log('--- SERVER RESTART: STATE RESET ---');
 
 // Airdrop State
 let activeAirdrop = null;
