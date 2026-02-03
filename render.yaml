@@ -20,7 +20,7 @@ services:
         fromService:
           type: web
           name: worldbase-server
-          property: url
+          property: host
     routes:
       - type: rewrite
         source: /*

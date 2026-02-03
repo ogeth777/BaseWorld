@@ -21,7 +21,9 @@ import axios from 'axios';
 import './App.css';
 
 // Socket setup
-const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3000');
+const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const socketUrl = apiUrl.startsWith('http') ? apiUrl : `https://${apiUrl}`;
+const socket = io(socketUrl);
 
 function App() {
   return (
@@ -105,7 +107,7 @@ function AppContent() {
 
         // 2. Server Sync
         try {
-            const res = await axios.get(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/user-state/${address}`);
+            const res = await axios.get(`${socketUrl}/api/user-state/${address}`);
             const serverTime = res.data.lastPaintTime;
             
             if (serverTime > localTime) {
@@ -247,7 +249,7 @@ function AppContent() {
       // if (!executeRecaptcha) return;
       // const token = await executeRecaptcha('paint_verify');
       
-      await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/paint`, {
+      await axios.post(`${socketUrl}/api/paint`, {
         txHash,
         tileId,
         address,
@@ -295,7 +297,7 @@ function AppContent() {
   const handleClaimAirdrop = async () => {
       if (!activeAirdrop || !address) return;
       try {
-          const res = await axios.post(`${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/api/airdrop/claim`, {
+          const res = await axios.post(`${socketUrl}/api/airdrop/claim`, {
               address,
               airdropId: activeAirdrop.id
           });
