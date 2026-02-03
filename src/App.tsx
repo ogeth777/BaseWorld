@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { OrbitControls, Stars } from '@react-three/drei';
+import { OrbitControls, Stars, AdaptiveDpr, Preload, Loader } from '@react-three/drei';
 import { Earth } from './components/Earth';
 import { SpaceDebris } from './components/SpaceDebris';
 import { BTCComet } from './components/BTCComet';
@@ -137,19 +137,23 @@ function App() {
   return (
     <div style={{ width: '100vw', height: '100vh', position: 'relative' }}>
       {/* 3D Scene */}
-      <Canvas camera={{ position: [0, 0, 12], fov: 45 }}>
+      <Canvas camera={{ position: [0, 0, 12], fov: 45 }} dpr={[1, 2]} performance={{ min: 0.5 }}>
+        <AdaptiveDpr pixelated />
+        <Preload all />
         <color attach="background" args={['#050510']} />
-        <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-        <ambientLight intensity={0.5} />
-        <pointLight position={[10, 10, 10]} intensity={1} />
-        
-        <Earth 
-          onTileClick={handleTileClick} 
-          paintedTiles={grid}
-          endgame={endgame}
-        />
-        <SpaceDebris />
-        <BTCComet />
+        <Suspense fallback={null}>
+          <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+          <ambientLight intensity={0.5} />
+          <pointLight position={[10, 10, 10]} intensity={1} />
+          
+          <Earth 
+            onTileClick={handleTileClick} 
+            paintedTiles={grid}
+            endgame={endgame}
+          />
+          <SpaceDebris />
+          <BTCComet />
+        </Suspense>
 
         <OrbitControls 
           enableZoom={true} 
@@ -157,8 +161,10 @@ function App() {
           maxDistance={20} 
           autoRotate={!selectedTile}
           autoRotateSpeed={0.5}
+          makeDefault
         />
       </Canvas>
+      <Loader />
 
       {/* UI Overlay */}
       <div className="ui-overlay">
