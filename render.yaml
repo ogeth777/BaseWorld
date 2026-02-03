@@ -9,9 +9,8 @@ services:
       - key: PORT
         value: 3000
 
-  - type: static
-    name: worldbase-frontend
-    env: static
+staticSites:
+  - name: worldbase-frontend
     plan: free
     buildCommand: npm install && npm run build
     publishDir: dist
