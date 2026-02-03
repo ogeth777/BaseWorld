@@ -3,6 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import { OrbitControls, Stars } from '@react-three/drei';
 import { Earth } from './components/Earth';
 import { SpaceDebris } from './components/SpaceDebris';
+import { BTCComet } from './components/BTCComet';
 import { useAccount, useConnect, useDisconnect, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { injected } from 'wagmi/connectors';
 import { PaintABI, CONTRACT_ADDRESS } from './web3/PaintABI';
@@ -139,9 +140,24 @@ function App() {
       <Canvas camera={{ position: [0, 0, 12], fov: 45 }}>
         <color attach="background" args={['#050510']} />
         <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
-        <OrbitControls makeDefault enablePan={false} minDistance={7} maxDistance={20} autoRotate={false} />
+        <ambientLight intensity={0.5} />
+        <pointLight position={[10, 10, 10]} intensity={1} />
+        
+        <Earth 
+          onTileClick={handleTileClick} 
+          paintedTiles={grid}
+          endgame={endgame}
+        />
         <SpaceDebris />
-        <Earth onTileClick={handleTileClick} paintedTiles={grid} endgame={endgame} />
+        <BTCComet />
+
+        <OrbitControls 
+          enableZoom={true} 
+          minDistance={6} 
+          maxDistance={20} 
+          autoRotate={!selectedTile}
+          autoRotateSpeed={0.5}
+        />
       </Canvas>
 
       {/* UI Overlay */}
