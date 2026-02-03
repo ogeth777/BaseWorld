@@ -160,6 +160,11 @@ io.on('connection', (socket) => {
   });
 });
 
+// Root endpoint for status check
+app.get('/', (req, res) => {
+    res.send('WorldBase Server is running. Access the frontend to play.');
+});
+
 // Endpoint to get user state (cooldowns)
 app.get('/api/user-state/:address', (req, res) => {
     const { address } = req.params;
