@@ -9,12 +9,10 @@ services:
       - key: PORT
         value: 3000
 
-  - type: web
-    name: worldbase-frontend
-    env: static
-    plan: free
+staticSites:
+  - name: worldbase-frontend
     buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    publishPath: dist
     envVars:
       - key: VITE_API_URL
         fromService:
