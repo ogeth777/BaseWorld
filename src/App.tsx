@@ -159,8 +159,7 @@ function App() {
           enableZoom={true} 
           minDistance={6} 
           maxDistance={20} 
-          autoRotate={!selectedTile}
-          autoRotateSpeed={0.5}
+          autoRotate={false}
           makeDefault
         />
       </Canvas>
