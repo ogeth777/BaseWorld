@@ -7,7 +7,6 @@ import { BTCComet } from './components/BTCComet';
 import { Leaderboard } from './components/Leaderboard';
 import { LiveFeed } from './components/LiveFeed';
 import { SpaceEnvironment } from './components/SpaceEnvironment';
-import { OrbitalLaser } from './components/OrbitalLaser';
 import { SpaceAirdrop } from './components/SpaceAirdrop';
 import { PlayerSatellites } from './components/PlayerSatellites';
 import { soundManager } from './components/AudioManager';
