@@ -197,15 +197,15 @@ app.post('/api/paint', async (req, res) => {
 
   try {
     // 3. Verify Transaction on Chain
-    // Robust retry loop for receipt (up to 120 seconds)
+    // Robust retry loop for receipt (up to 80 seconds to avoid Render 100s timeout)
     let receipt;
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 40; i++) {
         try {
             receipt = await client.getTransactionReceipt({ hash: txHash });
             if (receipt) break;
         } catch (e) {
-            console.log(`Attempt ${i+1}/60: Receipt not found yet...`);
-            if (i === 59) {
+            console.log(`Attempt ${i+1}/40: Receipt not found yet...`);
+            if (i === 39) {
                 console.error('Final attempt failed:', e.message);
                 throw e;
             }

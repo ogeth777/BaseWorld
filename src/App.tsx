@@ -290,8 +290,17 @@ function AppContent() {
       setGraffitiInput('');
     } catch (err) {
       console.error(err);
-      setStatusMsg(`Verification failed: ${err instanceof Error ? err.message : String(err)}`);
-      setIsPainting(false);
+      const errMsg = err instanceof Error ? err.message : String(err);
+      if (errMsg.includes('Network Error')) {
+          setStatusMsg('Server Timeout. Tx likely succeeded! Refreshing...');
+          // Assume success if it was a timeout after confirming tx
+          setTimeout(() => {
+             window.location.reload(); 
+          }, 3000);
+      } else {
+          setStatusMsg(`Verification failed: ${errMsg}`);
+          setIsPainting(false);
+      }
     }
   };
 
