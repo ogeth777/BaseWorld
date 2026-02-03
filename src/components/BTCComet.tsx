@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Trail, Sparkles, Float, useTexture } from '@react-three/drei';
+import { Trail, Sparkles, useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 
 // 5 minutes in milliseconds
@@ -8,6 +8,7 @@ const RESPAWN_TIME = 5 * 60 * 1000;
 
 export function BTCComet() {
   const meshRef = useRef<THREE.Group>(null);
+  const bodyRef = useRef<THREE.Mesh>(null);
   const [isActive, setIsActive] = useState(true);
   const [nextSpawnTime, setNextSpawnTime] = useState(0);
 
@@ -15,14 +16,20 @@ export function BTCComet() {
   const texture = useTexture('/btc.png');
 
   // Initial spawn configuration
-  const startPos = useMemo(() => new THREE.Vector3(-40, 25, -20), []);
-  const endPos = useMemo(() => new THREE.Vector3(40, -15, 20), []);
+  // Spawns high up and far away, moves diagonally down across the screen
+  const startPos = useMemo(() => new THREE.Vector3(-50, 30, -30), []);
+  const endPos = useMemo(() => new THREE.Vector3(50, -20, 30), []);
+  
+  // Normalized direction vector for linear motion
   const direction = useMemo(() => new THREE.Vector3().subVectors(endPos, startPos).normalize(), [startPos, endPos]);
   
-  // Speed factor (Even Slower and majestic)
-  const speed = 0.02; 
+  // Random rotation axis for tumbling effect
+  const rotationAxis = useMemo(() => new THREE.Vector3(Math.random(), Math.random(), Math.random()).normalize(), []);
 
-  useFrame((state) => {
+  // Speed factor (Steady linear motion)
+  const speed = 0.05; 
+
+  useFrame((state, delta) => {
     const now = Date.now();
 
     // Check if we need to respawn
@@ -30,23 +37,24 @@ export function BTCComet() {
       setIsActive(true);
       if (meshRef.current) {
         meshRef.current.position.copy(startPos);
-        // Reset trails if possible or just teleport
       }
     }
 
     if (isActive && meshRef.current) {
-      // Move along the path
+      // 1. LINEAR MOTION (No wobbling/floating)
+      // Moves exactly along the vector from start to end
       meshRef.current.position.addScaledVector(direction, speed);
       
-      // Rotate slowly
-      meshRef.current.rotation.y += 0.005;
-      meshRef.current.rotation.x += 0.002;
+      // 2. REALISTIC TUMBLING (Rotation)
+      // Rotates around a fixed axis like a real object in space
+      if (bodyRef.current) {
+        bodyRef.current.rotateOnAxis(rotationAxis, 0.01);
+      }
 
-      // Check if out of bounds (past the end position approximately)
-      if (meshRef.current.position.x > 45) {
+      // Check if out of bounds
+      if (meshRef.current.position.x > 60) {
         setIsActive(false);
         setNextSpawnTime(Date.now() + RESPAWN_TIME);
-        // Hide it far away
         meshRef.current.position.set(1000, 1000, 1000); 
       }
     }
@@ -54,78 +62,62 @@ export function BTCComet() {
 
   return (
     <group ref={meshRef} position={startPos} visible={isActive}>
-      {/* Long Majestic Tail */}
+      {/* 
+        TRAIL: Represents the tail of the comet/meteor.
+        In space, tails point away from the sun, but for visual effect
+        we usually make them trail behind the movement.
+      */}
       <Trail
-        width={8} // Wider tail
-        length={30} // Much longer tail for "comet" look
-        color={new THREE.Color("#ff6600")} // Deep fire orange
-        attenuation={(t) => t * t} // Quadratic fade for smooth tail
+        width={6} 
+        length={12} 
+        color={new THREE.Color("#ff5500")} 
+        attenuation={(t) => t * t}
       >
-        <Trail
-            width={4}
-            length={20}
-            color={new THREE.Color("#ffaa00")} // Inner brighter core
-            attenuation={(t) => t}
-        >
-            {/* The BTC Coin Head */}
-            <Float speed={2} rotationIntensity={0.5} floatIntensity={0.2}>
-            <group>
-                {/* Glowing Core */}
-                <mesh>
-                    <sphereGeometry args={[0.9, 32, 32]} />
-                    <meshBasicMaterial color="#ffaa00" transparent opacity={0.6} />
-                </mesh>
-                
-                {/* Coin Body */}
-                <mesh rotation={[Math.PI / 2, 0, 0]}>
-                  <cylinderGeometry args={[0.8, 0.8, 0.1, 32]} />
-                  <meshStandardMaterial 
-                      color="#f7931a" 
-                      metalness={0.9} 
-                      roughness={0.1} 
-                  />
-                </mesh>
-
-                {/* Front Face with Texture */}
-                <mesh position={[0, 0, 0.06]}>
-                    <circleGeometry args={[0.7, 32]} />
-                    <meshBasicMaterial map={texture} transparent />
-                </mesh>
-
-                {/* Back Face with Texture */}
-                <mesh position={[0, 0, -0.06]} rotation={[0, Math.PI, 0]}>
-                    <circleGeometry args={[0.7, 32]} />
-                    <meshBasicMaterial map={texture} transparent />
-                </mesh>
-            </group>
-            </Float>
-        </Trail>
+        <group>
+           {/* 
+             METEORITE BODY 
+             Using Icosahedron for a slightly rocky but round shape.
+             Flat shading gives it a low-poly space rock look.
+           */}
+           <mesh ref={bodyRef}>
+             <icosahedronGeometry args={[1.2, 1]} /> {/* Radius 1.2, Detail 1 (Rocky round) */}
+             <meshStandardMaterial 
+               map={texture}
+               color="#ffaa00"
+               roughness={0.8}
+               metalness={0.2}
+               flatShading={true} // Makes it look like a rock face
+               emissive="#ff4400"
+               emissiveIntensity={0.2}
+             />
+           </mesh>
+        </group>
       </Trail>
 
-      {/* Outer Dust/Gas Cloud (The Coma) */}
+      {/* FIRE/PLASMA SHEATH (The burning atmosphere effect) */}
       <Sparkles 
-        count={300}
-        scale={8} // Large area
-        size={8}
-        speed={0.1}
-        opacity={0.5}
-        color="#ff4500"
-        noise={2}
+        count={200}
+        scale={4}
+        size={6}
+        speed={0.4}
+        opacity={0.8}
+        color="#ffaa00"
+        noise={1} // Chaotic motion like fire
       />
       
-      {/* Trailing Debris */}
+      {/* DEBRIS TRAIL */}
       <Sparkles 
-        count={150}
-        scale={[3, 3, 25]} // Long trail of sparkles
-        position={[0, 0, -6]} // Behind the head
-        size={4}
-        speed={0.3}
-        opacity={0.6}
-        color="#ffd700"
+        count={100}
+        scale={[2, 2, 15]} // Long narrow trail behind
+        position={[-direction.x * 5, -direction.y * 5, -direction.z * 5]} // Offset behind
+        size={3}
+        speed={0} // Relative to container
+        opacity={0.5}
+        color="#884400"
       />
 
-      {/* Intense Light Source */}
-      <pointLight color="#ffaa00" intensity={5} distance={20} decay={2} />
+      {/* LIGHT SOURCE (The meteor glows) */}
+      <pointLight color="#ff6600" intensity={8} distance={25} decay={2} />
     </group>
   );
 }
