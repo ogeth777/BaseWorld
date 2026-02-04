@@ -21,7 +21,7 @@ import axios from 'axios';
 import './App.css';
 
 // Socket setup
-const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const apiUrl = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? 'https://worldbase-server-6e8i.onrender.com' : 'http://localhost:3000');
 const socketUrl = apiUrl.startsWith('http') ? apiUrl : `https://${apiUrl}`;
 const socket = io(socketUrl);
 
@@ -35,13 +35,13 @@ function App() {
 
 function AppContent() {
   const { address, isConnected } = useAccount();
-  const { connect } = useConnect();
+  const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
   
   // Web3 Actions
-  const { data: hash, writeContract, error: writeError, isPending: isTxPending } = useWriteContract();
+  const { data: hash, writeContractAsync, error: writeError, isPending: isTxPending } = useWriteContract();
   const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({ hash });
-  const { switchChain } = useSwitchChain();
+  const { switchChainAsync } = useSwitchChain();
   const chainId = useChainId();
 
   // Read Price
@@ -89,6 +89,8 @@ function AppContent() {
 
   // Batching Ref
   const pendingUpdates = useRef<any[]>([]);
+  const optimisticTiles = useRef<Set<number>>(new Set());
+  const currentPaintingTile = useRef<number | null>(null);
 
   // Load timer on address change (Local + Server Sync)
   useEffect(() => {
@@ -158,7 +160,12 @@ function AppContent() {
     
     socket.on('init-grid', (data) => {
       // data might be object or array
-      setGrid(Array.from(data));
+      const newGrid = Array.from(data);
+      // Re-apply optimistic tiles to prevent flickering/revert on reconnect
+      optimisticTiles.current.forEach(t => {
+          if (t < newGrid.length) newGrid[t] = 1; 
+      });
+      setGrid(newGrid);
     });
 
     socket.on('init-graffiti', (data) => {
@@ -245,62 +252,74 @@ function AppContent() {
     return () => clearInterval(interval);
   }, []);
 
+  // Immediate Optimistic Update on Hash (Before Confirmation)
+  useEffect(() => {
+    if (hash && currentPaintingTile.current !== null) {
+        const tileId = currentPaintingTile.current;
+        console.log('Tx Hash received. Optimistically painting tile:', tileId);
+        
+        optimisticTiles.current.add(tileId);
+        
+        setGrid(prev => {
+            const next = [...prev];
+            next[tileId] = 1;
+            return next;
+        });
+        
+        setGraffiti(prev => {
+             if (graffitiInput) return new Map(prev).set(tileId, graffitiInput);
+             return prev;
+        });
+
+        setStatusMsg('Transaction sent! Waiting for confirmation...');
+    }
+  }, [hash]);
+
   // Post-Transaction Verification
   useEffect(() => {
-    if (isConfirmed && hash && selectedTile !== null) {
-      verifyTransaction(hash, selectedTile);
+    if (isConfirmed && hash && currentPaintingTile.current !== null) {
+      const tileId = currentPaintingTile.current;
+      console.log('Tx confirmed on chain. Finalizing UI...');
+      
+      // Update cooldown
+      const now = Date.now();
+      setLastPaintTime(now);
+      if (address) localStorage.setItem(`lastPaintTime_${address}`, now.toString());
+      
+      setStatusMsg('Transaction confirmed! Syncing with server...');
+      
+      // 2. Notify Server (Background)
+      verifyTransaction(hash, tileId);
     }
   }, [isConfirmed, hash]);
 
   const verifyTransaction = async (txHash: string, tileId: number) => {
-    setStatusMsg('Verifying paint...');
     try {
-      // if (!executeRecaptcha) return;
-      // const token = await executeRecaptcha('paint_verify');
-      
       await axios.post(`${socketUrl}/api/paint`, {
         txHash,
         tileId,
         address,
         message: graffitiInput,
-        // captchaToken: token
       });
       
-      setStatusMsg('Painted successfully!');
+      setStatusMsg('Painted successfully! (Server Synced)');
       if (audioEnabled) soundManager.playSuccess();
       
-      // Optimistic Update
-      setGrid(prev => {
-          const next = [...prev];
-          next[tileId] = 1;
-          return next;
-      });
-      setGraffiti(prev => {
-          if (graffitiInput) return new Map(prev).set(tileId, graffitiInput);
-          return prev;
-      });
-
-      // Update cooldown
-      const now = Date.now();
-      setLastPaintTime(now);
-      if (address) localStorage.setItem(`lastPaintTime_${address}`, now.toString());
-
       setSelectedTile(null);
       setIsPainting(false);
       setGraffitiInput('');
     } catch (err) {
       console.error(err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      if (errMsg.includes('Network Error')) {
-          setStatusMsg('Server Timeout. Tx likely succeeded! Refreshing...');
-          // Assume success if it was a timeout after confirming tx
-          setTimeout(() => {
-             window.location.reload(); 
-          }, 3000);
-      } else {
-          setStatusMsg(`Verification failed: ${errMsg}`);
+      // Even if server fails, we leave the tile painted locally because the chain tx succeeded.
+      // The server will eventually catch up via background sync or next restart.
+      setStatusMsg(`Server Sync Warning: ${errMsg}. Tile painted locally.`);
+      
+      // Allow user to close modal
+      setTimeout(() => {
           setIsPainting(false);
-      }
+          setSelectedTile(null); 
+      }, 2000);
     }
   };
 
@@ -352,9 +371,15 @@ function AppContent() {
     }
   };
 
-  const handlePaint = async () => {
+  const handlePaint = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (!isConnected) {
-      connect({ connector: injected() });
+      const connector = connectors.find(c => c.name === 'MetaMask') || connectors[0];
+      if (connector) connect({ connector });
       return;
     }
 
@@ -368,7 +393,7 @@ function AppContent() {
     if (chainId !== baseSepolia.id) {
       console.log(`Wrong chain detected: ${chainId}. Requesting switch to ${baseSepolia.id}`);
       try {
-        switchChain({ chainId: baseSepolia.id });
+        await switchChainAsync({ chainId: baseSepolia.id });
         return;
       } catch (error) {
         console.error('Failed to switch chain:', error);
@@ -391,10 +416,12 @@ function AppContent() {
       // const token = await executeRecaptcha('paint_intent');
       // if (!token) throw new Error('Captcha failed');
 
+      currentPaintingTile.current = selectedTile;
+
       // 2. Send Transaction
       console.log('Sending tx with price:', formatEther(paintPrice as bigint));
       
-      writeContract({
+      await writeContractAsync({
         address: CONTRACT_ADDRESS,
         abi: PaintABI,
         functionName: 'paint',
@@ -481,7 +508,18 @@ function AppContent() {
           </div>
 
           <div className="wallet-wrapper">
-            <button onClick={() => isConnected ? disconnect() : connect({ connector: injected() })} className="btn-connect">
+            <button 
+              onClick={() => {
+                if (isConnected) {
+                  disconnect();
+                } else {
+                  // Prefer MetaMask or Injected
+                  const connector = connectors.find(c => c.name === 'MetaMask') || connectors[0];
+                  if (connector) connect({ connector });
+                }
+              }} 
+              className="btn-connect"
+            >
               {isConnected ? (
                   <div className="connected-badge">
                       <span className="dot" style={{ background: chainId === baseSepolia.id ? '#00ff88' : '#ff0000', boxShadow: `0 0 5px ${chainId === baseSepolia.id ? '#00ff88' : '#ff0000'}` }}></span>
@@ -490,7 +528,7 @@ function AppContent() {
               ) : 'CONNECT WALLET'}
             </button>
             {isConnected && chainId !== baseSepolia.id && (
-                 <button onClick={() => switchChain({ chainId: baseSepolia.id })} className="btn-switch-chain">
+                 <button onClick={() => switchChainAsync({ chainId: baseSepolia.id })} className="btn-switch-chain">
                     Switch to Base Sepolia
                  </button>
             )}
@@ -521,6 +559,7 @@ function AppContent() {
             {statusMsg && <p className="status">{statusMsg}</p>}
             
             <button 
+              type="button"
               className="btn-paint" 
               onClick={handlePaint} 
               disabled={isPainting || isTxPending || isConfirming || timeRemaining > 0}
@@ -529,7 +568,7 @@ function AppContent() {
               {isPainting || isTxPending || isConfirming ? 'PROCESSING...' : 
                timeRemaining > 0 ? `WAIT ${formatTime(timeRemaining)}` : `PAINT ${formatEther(paintPrice as bigint)} ETH`}
             </button>
-            <button className="btn-cancel" onClick={() => {
+            <button type="button" className="btn-cancel" onClick={() => {
                 setSelectedTile(null);
                 setStatusMsg('');
             }}>CANCEL</button>
@@ -537,7 +576,7 @@ function AppContent() {
             {writeError && (
                 <div className="error-box">
                     {writeError.message.includes('chain') || writeError.message.includes('Chain') 
-                        ? <button className="btn-switch-chain" onClick={() => switchChain({ chainId: baseSepolia.id })}>WRONG NETWORK. CLICK TO SWITCH.</button>
+                        ? <button className="btn-switch-chain" onClick={() => switchChainAsync({ chainId: baseSepolia.id })}>WRONG NETWORK. CLICK TO SWITCH.</button>
                         : `Error: ${writeError.message.slice(0, 100)}...`}
                 </div>
             )}

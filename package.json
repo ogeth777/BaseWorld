@@ -24,7 +24,18 @@
     "express-rate-limit": "^7.1.5",
     "helmet": "^7.1.0",
     "socket.io": "^4.7.4",
-    "viem": "^2.45.1"
+    "viem": "^2.45.1",
+    "@tanstack/react-query": "^5.24.1",
+    "ethers": "^6.16.0",
+    "framer-motion": "^11.0.5",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-google-recaptcha-v3": "^1.10.1",
+    "socket.io-client": "^4.7.4",
+    "three": "^0.166.1",
+    "wagmi": "^2.5.7",
+    "@react-three/drei": "^9.122.0",
+    "@react-three/fiber": "^8.18.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.0",
@@ -52,7 +63,7 @@
     "react-google-recaptcha-v3": "^1.10.1",
     "socket.io-client": "^4.7.4",
     "solidity-coverage": "^0.8.17",
-    "three": "^0.182.0",
+    "three": "^0.166.1",
     "ts-node": "^10.9.2",
     "typechain": "^8.3.2",
     "typescript": "^5.9.3",

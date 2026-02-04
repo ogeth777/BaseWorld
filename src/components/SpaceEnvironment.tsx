@@ -18,6 +18,7 @@ export function SpaceEnvironment() {
         speed={0.2} 
         opacity={0.5} 
         color="#ffffff"
+        raycast={() => null}
       />
     </group>
   );

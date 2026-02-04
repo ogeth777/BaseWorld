@@ -61,7 +61,7 @@ export function BTCComet() {
   });
 
   return (
-    <group ref={meshRef} position={startPos} visible={isActive}>
+    <group ref={meshRef} position={startPos} visible={isActive} raycast={() => null}>
       {/* 
         TRAIL: Represents the tail of the comet/meteor.
         In space, tails point away from the sun, but for visual effect

@@ -46,7 +46,7 @@ export function SpaceAirdrop({ data, onClaim }: { data: any, onClaim: () => void
     return (
         <group position={position} lookAt={new Vector3(0,0,0)}>
              {/* Beacon Beam - Infinite line to help find it */}
-            <mesh rotation={[Math.PI/2, 0, 0]}>
+            <mesh rotation={[Math.PI/2, 0, 0]} raycast={() => null}>
                 <cylinderGeometry args={[0.02, 0.02, 50, 8]} />
                 <meshBasicMaterial color="#ffaa00" transparent opacity={0.4} depthWrite={false} side={DoubleSide} />
             </mesh>
