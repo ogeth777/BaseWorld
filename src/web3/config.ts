@@ -12,9 +12,9 @@ export const config = createConfig({
   transports: {
     [baseSepolia.id]: fallback([
       http('https://base-sepolia-rpc.publicnode.com'),
+      http('https://base-sepolia.publicnode.com'),
       http('https://sepolia.base.org'),
       http('https://base-sepolia.blockpi.network/v1/rpc/public'),
-      http('https://public.stackup.sh/api/v1/node/base-sepolia'),
       http('https://base-sepolia.gateway.tenderly.co'),
       http('https://1rpc.io/base-sepolia'),
       http('https://base-sepolia.drpc.org'),
