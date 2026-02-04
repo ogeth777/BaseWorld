@@ -37,6 +37,7 @@ function AppContent() {
   const { address, isConnected } = useAccount();
   const { connectors, connect } = useConnect();
   const { disconnect } = useDisconnect();
+  const [showWalletOptions, setShowWalletOptions] = useState(false);
   
   // Web3 Actions
   const { data: hash, writeContractAsync, error: writeError, isPending: isTxPending } = useWriteContract();
@@ -508,18 +509,40 @@ function AppContent() {
           </div>
 
           <div className="wallet-wrapper">
-            <button 
-              onClick={() => {
-                if (isConnected) {
-                  disconnect();
-                } else {
-                  // Prefer MetaMask or Injected
-                  const connector = connectors.find(c => c.name === 'MetaMask') || connectors[0];
-                  if (connector) connect({ connector });
-                }
-              }} 
-              className="btn-connect"
-            >
+              {showWalletOptions && !isConnected && (
+                <div className="wallet-modal">
+                  <div className="wallet-modal-header">
+                    <h3>Select Wallet</h3>
+                    <button className="close-btn" onClick={() => setShowWalletOptions(false)}>×</button>
+                  </div>
+                  <div className="wallet-list">
+                    {connectors.map((connector) => (
+                      <button 
+                        key={connector.uid} 
+                        onClick={() => {
+                          connect({ connector });
+                          setShowWalletOptions(false);
+                        }}
+                        className="wallet-option"
+                      >
+                        <span className="wallet-name">{connector.name === 'Injected' ? 'Browser Wallet' : connector.name}</span>
+                        {connector.name.toLowerCase().includes('rabby') && <span className="recommended-tag">New</span>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <button 
+                onClick={() => {
+                  if (isConnected) {
+                    disconnect();
+                  } else {
+                    setShowWalletOptions(!showWalletOptions);
+                  }
+                }} 
+                className="btn-connect"
+              >
               {isConnected ? (
                   <div className="connected-badge">
                       <span className="dot" style={{ background: chainId === baseSepolia.id ? '#00ff88' : '#ff0000', boxShadow: `0 0 5px ${chainId === baseSepolia.id ? '#00ff88' : '#ff0000'}` }}></span>
