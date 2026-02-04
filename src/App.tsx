@@ -92,6 +92,7 @@ function AppContent() {
   const pendingUpdates = useRef<any[]>([]);
   const optimisticTiles = useRef<Set<number>>(new Set());
   const currentPaintingTile = useRef<number | null>(null);
+  const failedTxQueue = useRef<any[]>([]);
 
   // Load timer on address change (Local + Server Sync)
   useEffect(() => {
@@ -253,6 +254,30 @@ function AppContent() {
     return () => clearInterval(interval);
   }, []);
 
+  // Background Sync Retry for Failed Verifications
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (failedTxQueue.current.length === 0) return;
+
+      console.log('Retrying failed verifications...', failedTxQueue.current.length);
+      const remaining: any[] = [];
+
+      for (const tx of failedTxQueue.current) {
+        try {
+          await axios.post(`${socketUrl}/api/paint`, tx);
+          console.log('Retry success for tx:', tx.txHash);
+        } catch (e) {
+          console.error('Retry failed for tx:', tx.txHash, e);
+          remaining.push(tx); // Keep in queue if still failing
+        }
+      }
+
+      failedTxQueue.current = remaining;
+    }, 10000); // Check every 10 seconds
+
+    return () => clearInterval(interval);
+  }, []);
+
   // Immediate Optimistic Update on Hash (Before Confirmation)
   useEffect(() => {
     if (hash && currentPaintingTile.current !== null) {
@@ -312,9 +337,16 @@ function AppContent() {
     } catch (err) {
       console.error(err);
       const errMsg = err instanceof Error ? err.message : String(err);
-      // Even if server fails, we leave the tile painted locally because the chain tx succeeded.
-      // The server will eventually catch up via background sync or next restart.
-      setStatusMsg(`Server Sync Warning: ${errMsg}. Tile painted locally.`);
+      
+      // Queue for background retry
+      failedTxQueue.current.push({
+        txHash,
+        tileId,
+        address,
+        message: graffitiInput
+      });
+
+      setStatusMsg(`Server Sync Warning: ${errMsg}. Retrying in background...`);
       
       // Allow user to close modal
       setTimeout(() => {

@@ -112,8 +112,6 @@ const client = createPublicClient({
   chain: baseSepolia,
   transport: fallback([
     http('https://base-sepolia.gateway.tenderly.co'),
-    http('https://base-sepolia-rpc.publicnode.com'),
-    http('https://base-sepolia.drpc.org'),
     http('https://sepolia.base.org'),
     http('https://base-sepolia.publicnode.com'),
     http(process.env.RPC_URL || 'https://sepolia.base.org')
