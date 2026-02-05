@@ -7,13 +7,13 @@ export const config = createConfig({
   connectors: [
     injected(),
     metaMask(),
-    coinbaseWallet({ appName: 'Base World' }),
   ],
   transports: {
     [baseSepolia.id]: fallback([
-      http('https://base-sepolia.gateway.tenderly.co'),
-      http('https://sepolia.base.org'),
+      http('https://base-sepolia.drpc.org'),
       http('https://base-sepolia.publicnode.com'),
+      http('https://base-sepolia-rpc.publicnode.com'),
+      http('https://sepolia.base.org'),
     ], {
       rank: true
     }),

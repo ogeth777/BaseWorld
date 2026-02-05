@@ -111,9 +111,10 @@ function getLeaderboard() {
 const client = createPublicClient({
   chain: baseSepolia,
   transport: fallback([
-    http('https://base-sepolia.gateway.tenderly.co'),
-    http('https://sepolia.base.org'),
+    http('https://base-sepolia.drpc.org'),
     http('https://base-sepolia.publicnode.com'),
+    http('https://base-sepolia-rpc.publicnode.com'),
+    http('https://sepolia.base.org'),
     http(process.env.RPC_URL || 'https://sepolia.base.org')
   ], {
     rank: true // Automatically try best performing RPC

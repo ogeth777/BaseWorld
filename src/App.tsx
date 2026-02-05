@@ -18,6 +18,7 @@ import { PaintABI, CONTRACT_ADDRESS } from './web3/PaintABI';
 import { parseEther, formatEther } from 'viem';
 import { io } from 'socket.io-client';
 import axios from 'axios';
+import baseLogo from './assets/base-logo.svg';
 import './App.css';
 
 // Socket setup
@@ -65,6 +66,9 @@ function AppContent() {
       if (chainId === baseSepolia.id) {
           refetchPrice();
       }
+      console.log('Contract Address:', CONTRACT_ADDRESS);
+      console.log('Current Chain ID:', chainId);
+      console.log('Required Chain ID:', baseSepolia.id);
   }, [chainId, refetchPrice]);
 
   // State
@@ -115,7 +119,6 @@ function AppContent() {
             const serverTime = res.data.lastPaintTime;
             
             if (serverTime > localTime) {
-                console.log('Syncing timer from server:', serverTime);
                 setLastPaintTime(serverTime);
                 localStorage.setItem(key, serverTime.toString());
             }
@@ -305,7 +308,7 @@ function AppContent() {
   useEffect(() => {
     if (isConfirmed && hash && currentPaintingTile.current !== null) {
       const tileId = currentPaintingTile.current;
-      console.log('Tx confirmed on chain. Finalizing UI...');
+      // console.log('Tx confirmed on chain. Finalizing UI...');
       
       // Update cooldown
       const now = Date.now();
@@ -357,7 +360,6 @@ function AppContent() {
   };
 
   const handleTileClick = (index: number) => {
-    console.log('App: handleTileClick', index);
     if (audioEnabled) soundManager.playClick();
     if (grid[index] === 1) {
         setStatusMsg('Tile already painted!');
@@ -439,20 +441,10 @@ function AppContent() {
     setStatusMsg('Preparing transaction...');
 
     try {
-      // if (!executeRecaptcha) {
-      //    setStatusMsg('Captcha not ready');
-      //    setIsPainting(false);
-      //    return;
-      // }
-      
-      // 1. Get Captcha (Frontend Check)
-      // const token = await executeRecaptcha('paint_intent');
-      // if (!token) throw new Error('Captcha failed');
-
       currentPaintingTile.current = selectedTile;
 
       // 2. Send Transaction
-      console.log('Sending tx with price:', formatEther(paintPrice as bigint));
+      // console.log('Sending tx with price:', formatEther(paintPrice as bigint));
       
       await writeContractAsync({
         address: CONTRACT_ADDRESS,
@@ -461,6 +453,7 @@ function AppContent() {
         args: [BigInt(selectedTile)],
         value: paintPrice as bigint,
         chainId: baseSepolia.id, // Explicit chain
+        gas: BigInt(200000), // Force gas limit to avoid estimation errors
       });
 
     } catch (err) {
@@ -481,9 +474,10 @@ function AppContent() {
         <Preload all />
         <color attach="background" args={['#050510']} />
         <Suspense fallback={null}>
-          <Stars radius={100} depth={50} count={2000} factor={4} saturation={0} fade speed={1} />
-          <ambientLight intensity={0.5} />
-          <pointLight position={[10, 10, 10]} intensity={1} />
+          <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
+          <ambientLight intensity={1.5} />
+          <pointLight position={[10, 10, 10]} intensity={2.5} />
+          <pointLight position={[-10, -10, -10]} intensity={1} />
           
           <Earth 
             onTileClick={handleTileClick} 
@@ -514,32 +508,17 @@ function AppContent() {
         dataStyles={{ color: '#0052FF', fontSize: '1rem', fontFamily: 'Rajdhani' }}
       />
 
-      {/* UI Overlay */}
       <div className="ui-overlay">
         
-        <Leaderboard data={leaderboard} />
-        <LiveFeed events={feed} />
-        
-        <button className="audio-toggle" onClick={toggleAudio} title="Toggle Audio">
-           {audioEnabled ? '🔊' : '🔇'}
-        </button>
-
         <header>
           <div className="logo-section">
-             <div className="logo-circle"></div>
-             <h1>BASEWORLD</h1>
+             <img src={baseLogo} className="base-logo-img" alt="Base" />
+             <div className="logo-text">
+                 <span className="logo-base">BASE</span>
+                 <span className="logo-world">WORLD</span>
+             </div>
           </div>
           
-          <div className="stats-container">
-            <div className="stats-label">GLOBAL PROGRESS</div>
-            <div className="progress-bar-container">
-                <div className="progress-bar">
-                  <div className="fill" style={{ width: `${percentage}%` }}></div>
-                </div>
-                <span className="percentage">{percentage}%</span>
-            </div>
-          </div>
-
           <div className="wallet-wrapper">
               {showWalletOptions && !isConnected && (
                 <div className="wallet-modal">
@@ -548,7 +527,12 @@ function AppContent() {
                     <button className="close-btn" onClick={() => setShowWalletOptions(false)}>×</button>
                   </div>
                   <div className="wallet-list">
-                    {connectors.map((connector) => (
+                    {connectors
+                      .filter(c => {
+                          const name = c.name.toLowerCase();
+                          return name.includes('metamask') || name.includes('rabby');
+                      })
+                      .map((connector) => (
                       <button 
                         key={connector.uid} 
                         onClick={() => {
@@ -557,7 +541,7 @@ function AppContent() {
                         }}
                         className="wallet-option"
                       >
-                        <span className="wallet-name">{connector.name === 'Injected' ? 'Browser Wallet' : connector.name}</span>
+                        <span className="wallet-name">{connector.name}</span>
                         {connector.name.toLowerCase().includes('rabby') && <span className="recommended-tag">New</span>}
                       </button>
                     ))}
@@ -594,6 +578,23 @@ function AppContent() {
             )}
           </div>
         </header>
+
+        <Leaderboard data={leaderboard} />
+        <LiveFeed events={feed} />
+
+        <div className="top-center-stats">
+              <div className="stats-label">GLOBAL CONQUEST</div>
+              <div className="progress-bar-container">
+                 <div className="progress-bar">
+                    <div className="fill" style={{ width: `${percentage}%` }}></div>
+                 </div>
+                 <span className="percentage">{percentage}%</span>
+              </div>
+        </div>
+        
+        <button className="audio-toggle" onClick={toggleAudio} title="Toggle Audio">
+           {audioEnabled ? '🔊' : '🔇'}
+        </button>
 
         {endgame && <div className="endgame-banner">BASE WORLD UNLOCKED!</div>}
 
@@ -640,14 +641,14 @@ function AppContent() {
 
         {/* Bottom Controls */}
         <div className="bottom-controls">
+            <button onClick={devReset} className="btn-reset">
+                RESET WALLETS (DEV)
+            </button>
+
             <a href="https://www.base.org" target="_blank" rel="noopener noreferrer" className="base-badge">
             <div className="base-square"></div>
             <span>BUILT ON BASE</span>
             </a>
-            
-            <button onClick={devReset} className="btn-reset">
-                RESET WALLETS (DEV)
-            </button>
         </div>
       </div>
     </div>

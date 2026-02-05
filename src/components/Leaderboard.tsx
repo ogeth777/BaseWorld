@@ -15,18 +15,18 @@ export function Leaderboard({ data }: LeaderboardProps) {
 
   return (
     <div className="leaderboard-container">
-      <h3>🏆 TOP 10 CONQUERORS</h3>
+      <h3>TOP PAINTERS</h3>
       <div className="leaderboard-list">
         {top10.length === 0 ? (
-          <div className="empty-state">No tiles painted yet</div>
+          <div className="empty-state">No Data</div>
         ) : (
           top10.map((entry, index) => (
-            <div key={entry.address} className="leaderboard-item">
-              <span className="rank">#{index + 1}</span>
-              <span className="address">
+            <div key={entry.address} className={`leaderboard-item rank-${index + 1}`}>
+              <div className="rank">{index + 1}</div>
+              <div className="address">
                 {entry.address.slice(0, 6)}...{entry.address.slice(-4)}
-              </span>
-              <span className="score">{entry.score} TILES</span>
+              </div>
+              <div className="score">{entry.score}</div>
             </div>
           ))
         )}

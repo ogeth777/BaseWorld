@@ -4,25 +4,76 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { TextureLoader } from 'three';
 
-const COUNT = 80000;
+const COUNT = 79350; // 115 * 115 * 6
 const RADIUS = 7;
 
-// Helper to distribute points on a sphere (Fibonacci Sphere)
-function getFibonacciSpherePoints(samples: number, radius: number) {
+// Helper to distribute points on a Cube Sphere for aligned tiles
+function getCubeSpherePoints(radius: number) {
   const points = [];
-  const phi = Math.PI * (3 - Math.sqrt(5)); // Golden angle
+  const quaternions = [];
+  const resolution = 115;
+  
+  const faces = [
+    { origin: new THREE.Vector3(1, 1, 1), right: new THREE.Vector3(-1, 0, 0), up: new THREE.Vector3(0, -1, 0) }, // +Z
+    { origin: new THREE.Vector3(-1, 1, -1), right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, -1, 0) }, // -Z
+    { origin: new THREE.Vector3(-1, 1, 1), right: new THREE.Vector3(0, 0, -1), up: new THREE.Vector3(0, -1, 0) }, // -X
+    { origin: new THREE.Vector3(1, 1, -1), right: new THREE.Vector3(0, 0, 1), up: new THREE.Vector3(0, -1, 0) }, // +X
+    { origin: new THREE.Vector3(-1, 1, 1), right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 0, -1) }, // +Y
+    { origin: new THREE.Vector3(-1, -1, -1), right: new THREE.Vector3(1, 0, 0), up: new THREE.Vector3(0, 0, 1) }, // -Y
+  ];
 
-  for (let i = 0; i < samples; i++) {
-    const y = 1 - (i / (samples - 1)) * 2; // y goes from 1 to -1
-    const radiusAtY = Math.sqrt(1 - y * y); // Radius at y
-    const theta = phi * i; // Golden angle increment
+  // We need to generate faces carefully to match "Cube Sphere" projection
+  // Standard normalized cube to sphere:
+  // x' = x * sqrt(1 - y^2/2 - z^2/2 + y^2*z^2/3) ...
+  
+  // Simplified approach: Grid on cube faces, normalized
+  
+  // Let's use a simpler iteration over 6 faces
+  // Face normals
+  const directions = [
+      new THREE.Vector3(0, 0, 1),  // Front
+      new THREE.Vector3(0, 0, -1), // Back
+      new THREE.Vector3(1, 0, 0),  // Right
+      new THREE.Vector3(-1, 0, 0), // Left
+      new THREE.Vector3(0, 1, 0),  // Top
+      new THREE.Vector3(0, -1, 0)  // Bottom
+  ];
 
-    const x = Math.cos(theta) * radiusAtY;
-    const z = Math.sin(theta) * radiusAtY;
+  const step = 2 / (resolution - 1);
 
-    points.push(new THREE.Vector3(x * radius, y * radius, z * radius));
+  for (let face = 0; face < 6; face++) {
+      for (let y = 0; y < resolution; y++) {
+          for (let x = 0; x < resolution; x++) {
+              const u = -1 + x * step;
+              const v = -1 + y * step;
+              
+              const temp = new THREE.Vector3();
+              const normal = directions[face];
+              
+              // Map 2D (u,v) to 3D point on cube face
+              if (face === 0) temp.set(u, v, 1);
+              else if (face === 1) temp.set(-u, v, -1);
+              else if (face === 2) temp.set(1, v, -u);
+              else if (face === 3) temp.set(-1, v, u);
+              else if (face === 4) temp.set(u, 1, -v);
+              else if (face === 5) temp.set(u, -1, v);
+              
+              temp.normalize(); // Project to sphere
+              
+              const pos = temp.clone().multiplyScalar(radius);
+              points.push(pos);
+              
+              // Calculate rotation: look at center, but keep "up" aligned with grid
+              const dummy = new THREE.Object3D();
+              dummy.position.copy(pos);
+              dummy.lookAt(0,0,0); 
+              dummy.updateMatrix();
+              quaternions.push(dummy.quaternion.clone());
+          }
+      }
   }
-  return points;
+
+  return { points, quaternions };
 }
 
 interface EarthProps {
@@ -43,20 +94,8 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
   ]);
 
   // Generate Tile Positions
-  const { positions, quaternions } = useMemo(() => {
-    const points = getFibonacciSpherePoints(COUNT, RADIUS + 0.05); // Slightly above surface
-    const quaternions = [];
-    
-    // Calculate rotation for each tile to face outwards
-    const dummy = new THREE.Object3D();
-    for (let i = 0; i < points.length; i++) {
-      dummy.position.copy(points[i]);
-      dummy.lookAt(0, 0, 0); // Look at center
-      dummy.updateMatrix();
-      quaternions.push(dummy.quaternion.clone());
-    }
-    
-    return { positions: points, quaternions };
+  const { points: positions, quaternions } = useMemo(() => {
+    return getCubeSpherePoints(RADIUS + 0.05); 
   }, []);
 
   // Init InstancedMesh Matrix (Run Once)
@@ -74,11 +113,11 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
     }
     meshRef.current.instanceMatrix.needsUpdate = true;
     
-    // Initialize colors immediately to avoid invisible/black tiles if paintedTiles isn't ready
-    const tempColor = new THREE.Color();
+    const paintedColor = new THREE.Color('#0052FF').convertSRGBToLinear().multiplyScalar(1.5); 
+    const baseColor = new THREE.Color('#FFFFFF').convertSRGBToLinear(); // White base tiles
+    
     for (let i = 0; i < COUNT; i++) {
-        tempColor.set('#FFFFFF');
-        meshRef.current.setColorAt(i, tempColor);
+        meshRef.current.setColorAt(i, baseColor);
     }
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
     
@@ -89,14 +128,15 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
     if (!meshRef.current) return;
     
     const tempColor = new THREE.Color();
-    
+    const paintedColor = new THREE.Color('#0052FF').convertSRGBToLinear().multiplyScalar(1.5); // HDR Glow
+    const baseColor = new THREE.Color('#FFFFFF').convertSRGBToLinear(); // White base tiles
+
     for (let i = 0; i < COUNT; i++) {
       if (paintedTiles[i] === 1) {
-        tempColor.set('#0052FF'); // Base Blue
+        meshRef.current.setColorAt(i, paintedColor);
       } else {
-        tempColor.set('#FFFFFF');
+        meshRef.current.setColorAt(i, baseColor);
       }
-      meshRef.current.setColorAt(i, tempColor);
     }
     
     if (meshRef.current.instanceColor) meshRef.current.instanceColor.needsUpdate = true;
@@ -104,14 +144,6 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
 
   // Animation
   useFrame((state, delta) => {
-    // Disable auto rotation
-    // if (earthRef.current) {
-    //   earthRef.current.rotation.y += delta * 0.05;
-    // }
-    // if (meshRef.current) {
-    //   meshRef.current.rotation.y += delta * 0.05;
-    // }
-    
     // Endgame pulse
     if (endgame && meshRef.current) {
         const s = 1 + Math.sin(state.clock.elapsedTime * 2) * 0.02;
@@ -122,22 +154,10 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
   return (
     <group>
       {/* Base Earth Sphere - Optimized Geometry */}
-      <mesh ref={earthRef} onClick={() => console.log('Clicked Base Earth (missed tile)')}>
+      <mesh ref={earthRef}>
         <sphereGeometry args={[RADIUS, 48, 48]} />
         <meshStandardMaterial map={colorMap} metalness={0.2} roughness={0.7} />
       </mesh>
-
-      {/* Atmosphere Glow (Simplified) - Disabled to prevent raycast blocking
-      <mesh scale={[1.1, 1.1, 1.1]} raycast={() => null}>
-        <sphereGeometry args={[RADIUS, 64, 64]} />
-        <meshBasicMaterial 
-            color="#0052FF" 
-            transparent 
-            opacity={0.1} 
-            side={THREE.BackSide}
-        />
-      </mesh>
-      */}
 
       {/* Tiles */}
       <instancedMesh
@@ -163,12 +183,11 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
         }}
       >
         {/* Unit plane, scaled by instance scale */}
-        <planeGeometry args={[0.08, 0.08]} /> 
+        <planeGeometry args={[0.045, 0.045]} /> 
         <meshBasicMaterial  
-            side={THREE.DoubleSide} 
-            transparent 
-            opacity={0.8}
+            color="#FFFFFF"
             toneMapped={false}
+            side={THREE.DoubleSide} 
         />
       </instancedMesh>
       
@@ -203,8 +222,6 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
 
       {endgame && (
         <group rotation={[0,0,0]}>
-             {/* Floating Text - Simplified as 3D text takes font loading. 
-                 We'll assume user sees the UI text for now or add Text3D later. */}
         </group>
       )}
       
