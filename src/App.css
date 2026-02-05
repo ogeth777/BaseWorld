@@ -413,18 +413,18 @@ header {
     position: absolute;
     bottom: var(--hud-padding);
     left: var(--hud-padding);
-    width: 240px;
-    max-height: 180px;
+    width: 200px;
+    max-height: 140px;
     overflow-y: auto;
     background: var(--bg-dark);
     backdrop-filter: blur(15px);
     border: 1px solid rgba(0, 82, 255, 0.2);
     border-right: 4px solid var(--primary-color);
     border-radius: 12px;
-    padding: 15px;
+    padding: 10px;
     pointer-events: auto;
     box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-    font-size: 0.85rem;
+    font-size: 0.75rem;
 }
 
 .live-feed-container h3 {
