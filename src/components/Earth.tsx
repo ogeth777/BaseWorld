@@ -80,10 +80,9 @@ interface EarthProps {
   onTileClick: (index: number) => void;
   paintedTiles: Int8Array | number[]; // 0 or 1
   endgame: boolean;
-  graffiti: Map<number, string>;
 }
 
-export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthProps) {
+export function Earth({ onTileClick, paintedTiles, endgame }: EarthProps) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const earthRef = useRef<THREE.Mesh>(null);
   const [hovered, setHover] = useState<number | null>(null);
@@ -201,22 +200,6 @@ export function Earth({ onTileClick, paintedTiles, endgame, graffiti }: EarthPro
                 <planeGeometry args={[0.08, 0.08]} />
                 <meshBasicMaterial color="#FF00FF" side={THREE.DoubleSide} />
              </mesh>
-             {graffiti.has(hovered) && (
-                 <Html distanceFactor={10} position={[0, 0, 0.1]} style={{ pointerEvents: 'none' }}>
-                     <div style={{
-                         background: 'rgba(0,0,0,0.8)',
-                         color: '#fff',
-                         padding: '4px 8px',
-                         borderRadius: '4px',
-                         whiteSpace: 'nowrap',
-                         fontSize: '0.8rem',
-                         border: '1px solid #FF00FF',
-                         textShadow: '0 0 5px #FF00FF'
-                     }}>
-                         {graffiti.get(hovered)}
-                     </div>
-                 </Html>
-             )}
          </group>
       )}
 

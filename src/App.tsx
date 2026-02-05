@@ -82,8 +82,6 @@ function AppContent() {
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [feed, setFeed] = useState<any[]>([]);
   const [audioEnabled, setAudioEnabled] = useState(false);
-  const [graffiti, setGraffiti] = useState<Map<number, string>>(new Map());
-  const [graffitiInput, setGraffitiInput] = useState('');
   const [activeAirdrop, setActiveAirdrop] = useState<any>(null);
   const [laserTarget, setLaserTarget] = useState<number | null>(null);
 
@@ -173,10 +171,6 @@ function AppContent() {
       setGrid(newGrid);
     });
 
-    socket.on('init-graffiti', (data) => {
-        setGraffiti(new Map(data));
-    });
-
     socket.on('tile-painted', (data) => {
         // Push to queue for batched processing
         pendingUpdates.current.push(data);
@@ -194,7 +188,6 @@ function AppContent() {
 
     return () => {
       socket.off('init-grid');
-      socket.off('init-graffiti');
       socket.off('tile-painted');
       socket.off('leaderboard-update');
       socket.off('spawn-airdrop');
@@ -219,19 +212,6 @@ function AppContent() {
             batch.forEach(u => {
                 if (next[u.tileId] !== 1) {
                     next[u.tileId] = 1;
-                    changed = true;
-                }
-            });
-            return changed ? next : prev;
-        });
-
-        // 2. Batch Update Graffiti
-        setGraffiti(prev => {
-            const next = new Map(prev);
-            let changed = false;
-            batch.forEach(u => {
-                if (u.message) {
-                    next.set(u.tileId, u.message);
                     changed = true;
                 }
             });
@@ -267,7 +247,11 @@ function AppContent() {
 
       for (const tx of failedTxQueue.current) {
         try {
-          await axios.post(`${socketUrl}/api/paint`, tx);
+          await axios.post(`${socketUrl}/api/paint`, {
+            txHash: tx.txHash,
+            tileId: tx.tileId,
+            address: tx.address
+          });
           console.log('Retry success for tx:', tx.txHash);
         } catch (e) {
           console.error('Retry failed for tx:', tx.txHash, e);
@@ -293,11 +277,6 @@ function AppContent() {
             const next = [...prev];
             next[tileId] = 1;
             return next;
-        });
-        
-        setGraffiti(prev => {
-             if (graffitiInput) return new Map(prev).set(tileId, graffitiInput);
-             return prev;
         });
 
         setStatusMsg('Transaction sent! Waiting for confirmation...');
@@ -328,7 +307,6 @@ function AppContent() {
         txHash,
         tileId,
         address,
-        message: graffitiInput,
       });
       
       setStatusMsg('Painted successfully! (Server Synced)');
@@ -336,26 +314,26 @@ function AppContent() {
       
       setSelectedTile(null);
       setIsPainting(false);
-      setGraffitiInput('');
     } catch (err) {
-      console.error(err);
-      const errMsg = err instanceof Error ? err.message : String(err);
+      console.error("Verification error (will retry in background):", err);
+      // const errMsg = err instanceof Error ? err.message : String(err);
       
       // Queue for background retry
       failedTxQueue.current.push({
         txHash,
         tileId,
-        address,
-        message: graffitiInput
+        address
       });
 
-      setStatusMsg(`Server Sync Warning: ${errMsg}. Retrying in background...`);
+      // User sees SUCCESS because blockchain part worked. 
+      // Background retry will handle server sync.
+      setStatusMsg('Painted successfully!');
       
       // Allow user to close modal
       setTimeout(() => {
           setIsPainting(false);
           setSelectedTile(null); 
-      }, 2000);
+      }, 1000);
     }
   };
 
@@ -483,7 +461,6 @@ function AppContent() {
             onTileClick={handleTileClick} 
             paintedTiles={grid}
             endgame={endgame}
-            graffiti={graffiti}
           />
           <SpaceAirdrop data={activeAirdrop} onClaim={handleClaimAirdrop} />
           <PlayerSatellites players={leaderboard} />
@@ -603,15 +580,6 @@ function AppContent() {
             <h2>TILE #{selectedTile}</h2>
             <p>Cost: {formatEther(paintPrice as bigint)} ETH</p>
             
-            <input 
-                type="text" 
-                maxLength={20}
-                placeholder="Graffiti / Message (Optional)"
-                value={graffitiInput}
-                onChange={(e) => setGraffitiInput(e.target.value)}
-                className="graffiti-input"
-            />
-
             {statusMsg && <p className="status">{statusMsg}</p>}
             
             <button 
